@@ -5,6 +5,8 @@
  * Version: 1.1
  * Author: Samir Haddad
  * Author URI: https://samirh.com/
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;

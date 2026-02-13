@@ -1,13 +1,28 @@
 <?php
 /**
  * Plugin Name: Bricks BEM Generator
- * Description: Genera clases BEM automáticamente desde el panel de estructura de Bricks.
+ * Description: Automatically generate BEM classes from the Bricks structure panel.
  * Version: 1.0
  * Author: Samir Haddad
  * Author URI: https://samirh.com/
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+// 1. Cargar la librería
+require 'plugin-update-checker/plugin-update-checker.php';
+
+// 2. Configurar el actualizador
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$myUpdateChecker = PucFactory::buildUpdateChecker(
+	'https://github.com/samirhp/bricks-bem-plugin', // URL de tu repo en GitHub
+	__FILE__, // Archivo principal del plugin
+	'bricks-bem-generator' // Slug del plugin (debe coincidir con la carpeta)
+);
+
+// 3. Opcional: Configurar la rama (por defecto es 'master' o 'main')
+$myUpdateChecker->setBranch('main');
 
 // Usamos el gancho estándar pero con prioridad muy alta (9999) para asegurarnos que cargue al final
 add_action( 'wp_enqueue_scripts', 'bbem_enqueue_assets', 9999 );

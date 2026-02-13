@@ -8,6 +8,19 @@ document.addEventListener('DOMContentLoaded', () => {
         showLabels: true 
     };
 
+    // --- SEGURIDAD: Función para limpiar texto malicioso (XSS) ---
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.toString().replace(/[&<>"']/g, m => map[m]);
+    }
+
     // Wait for Bricks
     const waitForBricks = setInterval(() => {
         const appElement = document.querySelector("[data-v-app]");
@@ -25,15 +38,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function initBemPlugin() {
         const structurePanel = document.getElementById('bricks-structure');
         if (!structurePanel) return;
-        const observer = new MutationObserver(() => injectBemButtons(structurePanel));
+        
+        // --- RENDIMIENTO: Debounce para el MutationObserver ---
+        // Evita que el código se ejecute 100 veces si Bricks actualiza el DOM rápido
+        let timeout;
+        const observer = new MutationObserver(() => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => injectBemButtons(structurePanel), 50);
+        });
+        
         observer.observe(structurePanel, { childList: true, subtree: true });
         injectBemButtons(structurePanel);
     }
 
     function injectBemButtons(panel) {
-        const items = panel.querySelectorAll('li[data-id]');
+        // Selector optimizado
+        const items = panel.querySelectorAll('li[data-id]:not(.has-bbem-btn)');
+        
         items.forEach(item => {
+            // Doble chequeo por seguridad
             if (item.querySelector('.bbem-trigger-btn')) return;
+            
             let target = item.querySelector('.actions') || item.querySelector('.structure-item-actions') || item;
             
             const btn = document.createElement('div');
@@ -48,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (target.firstChild) target.insertBefore(btn, target.firstChild);
             else target.appendChild(btn);
+            
+            // Marcamos el item para no procesarlo de nuevo (Rendimiento)
+            item.classList.add('has-bbem-btn');
         });
     }
 
@@ -105,26 +133,32 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let rowsHtml = '';
         [rootEl, ...getDescendants(rootId)].forEach(el => {
-            const label = el.label || el.name || 'element';
-            const cls = el.id === rootId ? blockClass : `${blockClass}__${slugify(label)}`;
+            // SEGURIDAD: Sanitizamos inputs visuales
+            const rawLabel = el.label || el.name || 'element';
+            const safeLabel = escapeHtml(rawLabel); 
+            
+            const cls = el.id === rootId ? blockClass : `${blockClass}__${slugify(safeLabel)}`;
+            const safeCls = escapeHtml(cls);
+            
             const type = el.id === rootId ? 'BLOCK' : 'ELEMENT';
             const depth = el.depth || 0;
             const isBlock = el.id === rootId;
-            const elementSlug = slugify(label);
+            const elementSlug = slugify(safeLabel);
             
             const hideModsClass = userSettings.showModifiers ? '' : 'hide-mods';
 
+            // Usamos las variables "safe" dentro del HTML
             rowsHtml += `
                 <div class="bbem-row" data-id="${el.id}">
                     <div class="bbem-indent-wrapper bbem-indent-${Math.min(depth, 3)}">
                         <div class="bbem-label-group">
-                            <span class="bbem-original-name">${label}</span>
+                            <span class="bbem-original-name">${safeLabel}</span>
                             <span class="bbem-tag">${type}</span>
                         </div>
                         <div class="bbem-input-group ${hideModsClass}">
                             <input type="text" 
                                    class="bbem-input bbem-class-name" 
-                                   value="${cls}" 
+                                   value="${safeCls}" 
                                    data-is-block="${isBlock}" 
                                    data-original-slug="${elementSlug}">
                             <input type="text" class="bbem-input bbem-modifier" placeholder="mod">
@@ -139,11 +173,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const bodyClass = userSettings.showLabels ? '' : 'hide-labels';
         const toolbarClass = userSettings.showModifiers ? 'mods-active' : '';
         const modBtnClass = userSettings.showModifiers ? 'active' : '';
+        const baseLabelSafe = escapeHtml(baseLabel); // Sanitizar título
 
-        // Texto inicial del botón corregido a "None"
         panel.innerHTML = `
             <div class="bbem-header" id="bbem-drag-handle">
-                <h2>BEM: ${baseLabel}</h2>
+                <h2>BEM: ${baseLabelSafe}</h2>
                 <button class="bbem-close">&times;</button>
             </div>
             
@@ -201,43 +235,35 @@ document.addEventListener('DOMContentLoaded', () => {
         setupDraggable(panel);
         setupInteractions(panel);
     }
-
+    
+    // ... [El resto de funciones auxiliares (draggable, interactions, applyClasses) son iguales al anterior] ...
+    // Solo asegúrate de copiar las funciones auxiliares del script anterior v9.1 si las necesitas,
+    // pero la lógica crítica de seguridad/rendimiento está en el bloque de arriba.
+    
+    // (Incluyo aquí las funciones auxiliares para que sea un copy-paste completo y no falte nada)
     function setupDraggable(element) {
         const header = element.querySelector('#bbem-drag-handle');
         if (!header) return;
-
         let isDragging = false, startX, startY, initialLeft, initialTop;
-        
         header.onmousedown = (e) => {
-            isDragging = true; 
-            startX = e.clientX; 
-            startY = e.clientY;
+            isDragging = true; startX = e.clientX; startY = e.clientY;
             const rect = element.getBoundingClientRect();
-            initialLeft = rect.left; 
-            initialTop = rect.top;
+            initialLeft = rect.left; initialTop = rect.top;
             element.style.transform = 'none';
-            header.style.cursor = 'grabbing'; 
-            document.body.style.userSelect = 'none';
+            header.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
         };
-
         document.onmousemove = (e) => {
-            if (!isDragging) return; 
-            e.preventDefault();
+            if (!isDragging) return; e.preventDefault();
             element.style.left = `${initialLeft + (e.clientX - startX)}px`;
             element.style.top = `${initialTop + (e.clientY - startY)}px`;
         };
-
         document.onmouseup = () => {
-            isDragging = false; 
-            header.style.cursor = 'grab'; 
-            document.body.style.userSelect = '';
+            isDragging = false; header.style.cursor = 'grab'; document.body.style.userSelect = '';
         };
     }
 
     function setupInteractions(panel) {
         const toolbar = panel.querySelector('.bbem-toolbar');
-
-        // Save Settings
         const saveSetting = (id, key) => {
             const el = panel.querySelector(id);
             if(el) {
@@ -250,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         saveSetting('#bbem-toggle-replace', 'replaceMode');
         saveSetting('#bbem-toggle-sync', 'syncLabels');
 
-        // Toggle Labels
         const labelsToggle = panel.querySelector('#bbem-toggle-labels');
         const bodyEl = panel.querySelector('.bbem-body');
         if(labelsToggle) {
@@ -261,23 +286,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Toggle Mods
         const modVisBtn = panel.querySelector('#bbem-toggle-mods-vis');
         if(modVisBtn) {
             modVisBtn.addEventListener('click', () => {
                 const isActive = modVisBtn.classList.toggle('active');
                 userSettings.showModifiers = isActive;
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
-                
                 const inputGroups = panel.querySelectorAll('.bbem-input-group');
                 inputGroups.forEach(g => isActive ? g.classList.remove('hide-mods') : g.classList.add('hide-mods'));
-                
                 if (isActive) toolbar.classList.add('mods-active');
                 else toolbar.classList.remove('mods-active');
             });
         }
 
-        // Reactivity
         const blockInput = panel.querySelector('input[data-is-block="true"]');
         if (blockInput) {
             blockInput.addEventListener('input', (e) => {
@@ -295,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Select All/None
         const selectAllBtn = panel.querySelector('#bbem-select-all-btn');
         if(selectAllBtn) {
             let allSelected = true;
@@ -310,7 +330,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Checkboxes
         panel.querySelectorAll('.bbem-include-checkbox').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 const row = e.target.closest('.bbem-row');
@@ -318,62 +337,43 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Close/Apply
         const close = () => panel.remove();
         panel.querySelectorAll('.bbem-close, .bbem-close-btn').forEach(b => b.onclick = close);
-        
         const applyBtn = document.getElementById('bbem-apply');
         if(applyBtn) {
-            applyBtn.onclick = () => {
-                applyClasses(panel);
-                close();
-            };
+            applyBtn.onclick = () => { applyClasses(panel); close(); };
         }
     }
 
     function applyClasses(panel) {
         let count = 0;
         const state = getBricksState();
-        
         const shouldReplace = panel.querySelector('#bbem-toggle-replace').checked;
         const shouldSyncLabel = panel.querySelector('#bbem-toggle-sync').checked;
 
         panel.querySelectorAll('.bbem-row').forEach(row => {
             if (!row.querySelector('.bbem-include-checkbox').checked) return;
-
             const id = row.dataset.id;
             const clsInput = row.querySelector('.bbem-class-name').value.trim();
             const modInput = row.querySelector('.bbem-modifier').value.trim();
-            
             if (!clsInput) return;
 
             let classesToCreate = [];
             let cleanMod = modInput;
-            
-            if (cleanMod && !cleanMod.startsWith('--')) {
-                cleanMod = '--' + cleanMod;
-            }
-
+            if (cleanMod && !cleanMod.startsWith('--')) cleanMod = '--' + cleanMod;
             const isModifierOperation = !!cleanMod;
 
             if (isModifierOperation) {
-                // MODIFICADOR: Solo clase modificada, no borrar clases existentes, no renombrar
                 const modClass = `${clsInput}${cleanMod}`; 
                 classesToCreate = [modClass];
             } else {
-                // NORMAL: Clase base
                 classesToCreate = [clsInput];
             }
 
             const element = findElement(id);
             if (element) {
                 if (!element.settings) element.settings = {};
-                
-                // Si es modo normal y Reemplazar está activo, limpiar
-                if (shouldReplace && !isModifierOperation) {
-                    element.settings._cssGlobalClasses = [];
-                }
-
+                if (shouldReplace && !isModifierOperation) element.settings._cssGlobalClasses = [];
                 if (!element.settings._cssGlobalClasses) element.settings._cssGlobalClasses = [];
 
                 classesToCreate.forEach(className => {
@@ -388,15 +388,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Solo sincronizar etiqueta si es modo Normal
                 if (shouldSyncLabel && !isModifierOperation) {
                     const baseClass = classesToCreate[0]; 
                     const blockName = panel.querySelector('input[data-is-block="true"]').value.trim();
                     let newLabel = formatLabel(baseClass, blockName);
                     if (!newLabel || newLabel.trim() === '') newLabel = baseClass.replace(/-/g, ' ').replace(/(^\w{1})|(\s+\w{1})/g, l => l.toUpperCase());
-                    
                     element.label = newLabel;
-                    
                     setTimeout(() => {
                         const selectors = [
                             `li[data-id="${id}"] .structure-item-title span.text`,

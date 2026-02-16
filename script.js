@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Config
     const SETTINGS_KEY = 'bbem_settings';
     let userSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {
         replaceMode: false,
@@ -8,20 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showLabels: true 
     };
 
-    // --- SEGURIDAD: Función para limpiar texto malicioso (XSS) ---
     function escapeHtml(text) {
         if (!text) return '';
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
         return text.toString().replace(/[&<>"']/g, m => map[m]);
     }
 
-    // Wait for Bricks
     const waitForBricks = setInterval(() => {
         const appElement = document.querySelector("[data-v-app]");
         if (appElement && appElement.__vue_app__) {
@@ -39,8 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const structurePanel = document.getElementById('bricks-structure');
         if (!structurePanel) return;
         
-        // --- RENDIMIENTO: Debounce para el MutationObserver ---
-        // Evita que el código se ejecute 100 veces si Bricks actualiza el DOM rápido
         let timeout;
         const observer = new MutationObserver(() => {
             clearTimeout(timeout);
@@ -52,13 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function injectBemButtons(panel) {
-        // Selector optimizado
         const items = panel.querySelectorAll('li[data-id]:not(.has-bbem-btn)');
-        
         items.forEach(item => {
-            // Doble chequeo por seguridad
             if (item.querySelector('.bbem-trigger-btn')) return;
-            
             let target = item.querySelector('.actions') || item.querySelector('.structure-item-actions') || item;
             
             const btn = document.createElement('div');
@@ -74,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target.firstChild) target.insertBefore(btn, target.firstChild);
             else target.appendChild(btn);
             
-            // Marcamos el item para no procesarlo de nuevo (Rendimiento)
             item.classList.add('has-bbem-btn');
         });
     }
@@ -133,12 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let rowsHtml = '';
         [rootEl, ...getDescendants(rootId)].forEach(el => {
-            // SEGURIDAD: Sanitizamos inputs visuales
             const rawLabel = el.label || el.name || 'element';
             const safeLabel = escapeHtml(rawLabel); 
-            
-            const cls = el.id === rootId ? blockClass : `${blockClass}__${slugify(safeLabel)}`;
-            const safeCls = escapeHtml(cls);
+            const safeBlockClass = escapeHtml(blockClass);
             
             const type = el.id === rootId ? 'BLOCK' : 'ELEMENT';
             const depth = el.depth || 0;
@@ -147,7 +128,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const hideModsClass = userSettings.showModifiers ? '' : 'hide-mods';
 
-            // Usamos las variables "safe" dentro del HTML
+            let classWrapperHtml = '';
+            if (isBlock) {
+                classWrapperHtml = `
+                    <div class="bbem-class-wrapper">
+                        <input type="text" class="bbem-class-name inner-input" value="${safeBlockClass}" data-is-block="true">
+                    </div>`;
+            } else {
+                classWrapperHtml = `
+                    <div class="bbem-class-wrapper">
+                        <span class="bbem-block-prefix">${safeBlockClass}__</span>
+                        <input type="text" class="bbem-class-name inner-input" value="${elementSlug}" data-is-block="false">
+                    </div>`;
+            }
+
             rowsHtml += `
                 <div class="bbem-row" data-id="${el.id}">
                     <div class="bbem-indent-wrapper bbem-indent-${Math.min(depth, 3)}">
@@ -156,11 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="bbem-tag">${type}</span>
                         </div>
                         <div class="bbem-input-group ${hideModsClass}">
-                            <input type="text" 
-                                   class="bbem-input bbem-class-name" 
-                                   value="${safeCls}" 
-                                   data-is-block="${isBlock}" 
-                                   data-original-slug="${elementSlug}">
+                            ${classWrapperHtml}
                             <input type="text" class="bbem-input bbem-modifier" placeholder="mod">
                         </div>
                     </div>
@@ -173,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const bodyClass = userSettings.showLabels ? '' : 'hide-labels';
         const toolbarClass = userSettings.showModifiers ? 'mods-active' : '';
         const modBtnClass = userSettings.showModifiers ? 'active' : '';
-        const baseLabelSafe = escapeHtml(baseLabel); // Sanitizar título
+        const baseLabelSafe = escapeHtml(baseLabel); 
 
         panel.innerHTML = `
             <div class="bbem-header" id="bbem-drag-handle">
@@ -200,9 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
 
                 <div class="bbem-separator"></div>
-
                 <button class="bbem-text-toggle ${modBtnClass}" id="bbem-toggle-mods-vis">MODIFIER</button>
-                
                 <span class="bbem-toggle-label" id="bbem-select-all-btn" style="margin-left:auto; cursor:pointer; color:var(--bbem-accent);">None</span>
             </div>
 
@@ -235,12 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupDraggable(panel);
         setupInteractions(panel);
     }
-    
-    // ... [El resto de funciones auxiliares (draggable, interactions, applyClasses) son iguales al anterior] ...
-    // Solo asegúrate de copiar las funciones auxiliares del script anterior v9.1 si las necesitas,
-    // pero la lógica crítica de seguridad/rendimiento está en el bloque de arriba.
-    
-    // (Incluyo aquí las funciones auxiliares para que sea un copy-paste completo y no falte nada)
+
     function setupDraggable(element) {
         const header = element.querySelector('#bbem-drag-handle');
         if (!header) return;
@@ -266,12 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const toolbar = panel.querySelector('.bbem-toolbar');
         const saveSetting = (id, key) => {
             const el = panel.querySelector(id);
-            if(el) {
-                el.addEventListener('change', (e) => {
-                    userSettings[key] = e.target.checked;
-                    localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
-                });
-            }
+            if(el) { el.addEventListener('change', (e) => { userSettings[key] = e.target.checked; localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings)); }); }
         };
         saveSetting('#bbem-toggle-replace', 'replaceMode');
         saveSetting('#bbem-toggle-sync', 'syncLabels');
@@ -294,28 +272,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
                 const inputGroups = panel.querySelectorAll('.bbem-input-group');
                 inputGroups.forEach(g => isActive ? g.classList.remove('hide-mods') : g.classList.add('hide-mods'));
-                if (isActive) toolbar.classList.add('mods-active');
-                else toolbar.classList.remove('mods-active');
+                if (isActive) toolbar.classList.add('mods-active'); else toolbar.classList.remove('mods-active');
             });
         }
 
+        // LÓGICA DE REACTIVIDAD: Actualizar prefijos del Bloque
         const blockInput = panel.querySelector('input[data-is-block="true"]');
         if (blockInput) {
             blockInput.addEventListener('input', (e) => {
-                const newBlockName = e.target.value.trim();
-                const childInputs = panel.querySelectorAll('input:not([data-is-block="true"]).bbem-class-name');
-                childInputs.forEach(input => {
-                    const row = input.closest('.bbem-row');
-                    if (!row.querySelector('.bbem-include-checkbox').checked) return;
-                    const currentVal = input.value;
-                    let suffix = '';
-                    if (currentVal.includes('__')) suffix = currentVal.split('__')[1]; 
-                    else suffix = input.dataset.originalSlug;
-                    input.value = `${newBlockName}__${suffix}`;
+                const newBlockName = slugify(e.target.value);
+                const prefixes = panel.querySelectorAll('.bbem-block-prefix');
+                prefixes.forEach(prefix => {
+                    prefix.textContent = newBlockName ? `${newBlockName}__` : '';
                 });
             });
         }
 
+        // --- MAGIA NUEVA: VALIDACIÓN EN VIVO AL ESCRIBIR ---
+        panel.querySelectorAll('.bbem-class-name').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const wrapper = e.target.closest('.bbem-class-wrapper');
+                if (wrapper) {
+                    if (!e.target.value.trim()) {
+                        wrapper.classList.add('bbem-input-error');
+                    } else {
+                        wrapper.classList.remove('bbem-input-error');
+                        wrapper.classList.remove('bbem-shake'); // Quitamos el shake si existía
+                    }
+                }
+            });
+        });
+        
+        // Enfocar el input al hacer clic en el wrapper
+        panel.querySelectorAll('.bbem-class-wrapper').forEach(wrapper => {
+            wrapper.addEventListener('click', () => {
+                const input = wrapper.querySelector('input');
+                if (input) input.focus();
+            });
+        });
+
+        // Botón Select All/None
         const selectAllBtn = panel.querySelector('#bbem-select-all-btn');
         if(selectAllBtn) {
             let allSelected = true;
@@ -324,24 +320,82 @@ document.addEventListener('DOMContentLoaded', () => {
                 panel.querySelectorAll('.bbem-include-checkbox').forEach(cb => {
                     cb.checked = allSelected;
                     const row = cb.closest('.bbem-row');
-                    allSelected ? row.classList.remove('disabled') : row.classList.add('disabled');
+                    const wrapper = row.querySelector('.bbem-class-wrapper');
+                    const input = row.querySelector('.bbem-class-name');
+                    
+                    if (allSelected) {
+                        row.classList.remove('disabled');
+                        if (input && !input.value.trim() && wrapper) wrapper.classList.add('bbem-input-error');
+                    } else {
+                        row.classList.add('disabled');
+                        if (wrapper) {
+                            wrapper.classList.remove('bbem-input-error');
+                            wrapper.classList.remove('bbem-shake');
+                        }
+                    }
                 });
                 selectAllBtn.textContent = allSelected ? "None" : "All";
             });
         }
         
+        // Checkboxes individuales (Actualizado para validación interactiva)
         panel.querySelectorAll('.bbem-include-checkbox').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 const row = e.target.closest('.bbem-row');
-                e.target.checked ? row.classList.remove('disabled') : row.classList.add('disabled');
+                const wrapper = row.querySelector('.bbem-class-wrapper');
+                const input = row.querySelector('.bbem-class-name');
+
+                if (e.target.checked) {
+                    row.classList.remove('disabled');
+                    // Si al volver a marcar el campo está vacío, pintar rojo
+                    if (input && !input.value.trim() && wrapper) {
+                        wrapper.classList.add('bbem-input-error');
+                    }
+                } else {
+                    row.classList.add('disabled');
+                    // Si desmarcamos, limpiar errores para que se vea neutro
+                    if (wrapper) {
+                        wrapper.classList.remove('bbem-input-error');
+                        wrapper.classList.remove('bbem-shake');
+                    }
+                }
             });
         });
 
         const close = () => panel.remove();
         panel.querySelectorAll('.bbem-close, .bbem-close-btn').forEach(b => b.onclick = close);
+        
+        // --- VALIDACIÓN AL HACER CLIC EN APPLY (Ahora con vibración separada) ---
         const applyBtn = document.getElementById('bbem-apply');
         if(applyBtn) {
-            applyBtn.onclick = () => { applyClasses(panel); close(); };
+            applyBtn.onclick = () => {
+                let isValid = true;
+                
+                panel.querySelectorAll('.bbem-row').forEach(row => {
+                    if (!row.querySelector('.bbem-include-checkbox').checked) return;
+                    
+                    const inputEl = row.querySelector('.bbem-class-name');
+                    const wrapper = row.querySelector('.bbem-class-wrapper');
+                    
+                    if (!inputEl.value.trim()) {
+                        isValid = false;
+                        wrapper.classList.add('bbem-input-error');
+                        
+                        // Forzar reinicio de animación de vibración (Shake)
+                        wrapper.classList.remove('bbem-shake');
+                        void wrapper.offsetWidth; 
+                        wrapper.classList.add('bbem-shake');
+                    } else {
+                        wrapper.classList.remove('bbem-input-error');
+                        wrapper.classList.remove('bbem-shake');
+                    }
+                });
+
+                if (isValid) {
+                    applyClasses(panel);
+                    close();
+                }
+            };
         }
     }
 
@@ -353,8 +407,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         panel.querySelectorAll('.bbem-row').forEach(row => {
             if (!row.querySelector('.bbem-include-checkbox').checked) return;
+            
             const id = row.dataset.id;
-            const clsInput = row.querySelector('.bbem-class-name').value.trim();
+            const inputEl = row.querySelector('.bbem-class-name');
+            const isBlockInput = inputEl.dataset.isBlock === 'true';
+            const rawValue = slugify(inputEl.value);
+            
+            let clsInput = rawValue;
+            if (!isBlockInput) {
+                const prefixEl = row.querySelector('.bbem-block-prefix');
+                const prefix = prefixEl ? prefixEl.textContent : '';
+                clsInput = prefix + rawValue;
+            }
+
             const modInput = row.querySelector('.bbem-modifier').value.trim();
             if (!clsInput) return;
 

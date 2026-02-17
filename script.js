@@ -44,20 +44,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = panel.querySelectorAll('li[data-id]:not(.has-bbem-btn)');
         items.forEach(item => {
             if (item.querySelector('.bbem-trigger-btn')) return;
-            let target = item.querySelector('.actions') || item.querySelector('.structure-item-actions') || item;
+            
+            let target = item.querySelector('.actions') || item.querySelector('.structure-item-actions');
             
             const btn = document.createElement('div');
             btn.className = 'bbem-trigger-btn';
             btn.textContent = "BEM";
             btn.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 const existing = document.querySelector('.bbem-draggable-panel');
                 if (existing) existing.remove();
                 openBemPanel(item.getAttribute('data-id'));
             });
 
-            if (target.firstChild) target.insertBefore(btn, target.firstChild);
-            else target.appendChild(btn);
+            if (target) {
+                if (target.firstChild) target.insertBefore(btn, target.firstChild);
+                else target.appendChild(btn);
+            } else {
+                btn.classList.add('bbem-no-actions');
+                let titleNode = item.firstElementChild;
+                if (titleNode) {
+                    titleNode.style.position = 'relative';
+                    titleNode.appendChild(btn);
+                } else {
+                    item.appendChild(btn);
+                }
+            }
             
             item.classList.add('has-bbem-btn');
         });
@@ -93,19 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return cleanName.replace(/-/g, ' ').replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
     }
 
-    function calculateInitialPosition(panelWidth = 440) {
-        const structurePanel = document.getElementById('bricks-structure');
-        let left = 350, top = 100;
-        if (structurePanel) {
-            const rect = structurePanel.getBoundingClientRect();
-            left = rect.right + 10;
-            top = rect.top + 40;
-        }
-        if (left + panelWidth > window.innerWidth) left = window.innerWidth - panelWidth - 20;
-        return { left, top };
-    }
-
-    // --- RENDER ---
     function openBemPanel(rootId) {
         const rootEl = findElement(rootId);
         if (!rootEl) return;
@@ -120,43 +120,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawLabel = el.label || el.name || 'element';
             const safeLabel = escapeHtml(rawLabel); 
             const safeBlockClass = escapeHtml(blockClass);
-            
             const type = el.id === rootId ? 'BLOCK' : 'ELEMENT';
             const depth = el.depth || 0;
             const isBlock = el.id === rootId;
             const elementSlug = slugify(safeLabel);
-            
             const hideModsClass = userSettings.showModifiers ? '' : 'hide-mods';
 
             let classWrapperHtml = '';
             if (isBlock) {
-                classWrapperHtml = `
-                    <div class="bbem-class-wrapper">
-                        <input type="text" class="bbem-class-name inner-input" value="${safeBlockClass}" data-is-block="true">
-                    </div>`;
+                classWrapperHtml = `<div class="bbem-class-wrapper"><input type="text" class="bbem-class-name inner-input" value="${safeBlockClass}" data-is-block="true"></div>`;
             } else {
-                classWrapperHtml = `
-                    <div class="bbem-class-wrapper">
-                        <span class="bbem-block-prefix">${safeBlockClass}__</span>
-                        <input type="text" class="bbem-class-name inner-input" value="${elementSlug}" data-is-block="false">
-                    </div>`;
+                classWrapperHtml = `<div class="bbem-class-wrapper"><span class="bbem-block-prefix">${safeBlockClass}__</span><input type="text" class="bbem-class-name inner-input" value="${elementSlug}" data-is-block="false"></div>`;
             }
 
             rowsHtml += `
                 <div class="bbem-row" data-id="${el.id}">
                     <div class="bbem-indent-wrapper bbem-indent-${Math.min(depth, 3)}">
-                        <div class="bbem-label-group">
-                            <span class="bbem-original-name">${safeLabel}</span>
-                            <span class="bbem-tag">${type}</span>
-                        </div>
+                        <div class="bbem-label-group"><span class="bbem-original-name">${safeLabel}</span><span class="bbem-tag">${type}</span></div>
                         <div class="bbem-input-group ${hideModsClass}">
                             ${classWrapperHtml}
                             <input type="text" class="bbem-input bbem-modifier" placeholder="mod">
                         </div>
                     </div>
-                    <div class="bbem-checkbox-col">
-                        <input type="checkbox" class="bbem-include-checkbox" checked title="Include">
-                    </div>
+                    <div class="bbem-checkbox-col"><input type="checkbox" class="bbem-include-checkbox" checked title="Include"></div>
                 </div>`;
         });
 
@@ -170,41 +156,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h2>BEM: ${baseLabelSafe}</h2>
                 <button class="bbem-close">&times;</button>
             </div>
-            
             <div class="bbem-toolbar ${toolbarClass}">
                 <div class="bbem-general-group">
-                    <label class="bbem-toggle-group">
-                        <div class="bbem-switch">
-                            <input type="checkbox" id="bbem-toggle-replace" ${userSettings.replaceMode ? 'checked' : ''}>
-                            <span class="bbem-slider"></span>
-                        </div>
-                        <span class="bbem-toggle-label">Replace</span>
-                    </label>
-                    <label class="bbem-toggle-group">
-                        <div class="bbem-switch">
-                            <input type="checkbox" id="bbem-toggle-sync" ${userSettings.syncLabels ? 'checked' : ''}>
-                            <span class="bbem-slider"></span>
-                        </div>
-                        <span class="bbem-toggle-label">Sync</span>
-                    </label>
+                    <label class="bbem-toggle-group"><div class="bbem-switch"><input type="checkbox" id="bbem-toggle-replace" ${userSettings.replaceMode ? 'checked' : ''}><span class="bbem-slider"></span></div><span class="bbem-toggle-label">Replace</span></label>
+                    <label class="bbem-toggle-group"><div class="bbem-switch"><input type="checkbox" id="bbem-toggle-sync" ${userSettings.syncLabels ? 'checked' : ''}><span class="bbem-slider"></span></div><span class="bbem-toggle-label">Sync</span></label>
                 </div>
-
                 <div class="bbem-separator"></div>
                 <button class="bbem-text-toggle ${modBtnClass}" id="bbem-toggle-mods-vis">MODIFIER</button>
                 <span class="bbem-toggle-label" id="bbem-select-all-btn" style="margin-left:auto; cursor:pointer; color:var(--bbem-accent);">None</span>
             </div>
-
             <div class="bbem-body ${bodyClass}">${rowsHtml}</div>
-            
             <div class="bbem-footer">
                 <div class="bbem-footer-left">
-                    <label class="bbem-toggle-group">
-                        <div class="bbem-switch">
-                            <input type="checkbox" id="bbem-toggle-labels" ${userSettings.showLabels ? 'checked' : ''}>
-                            <span class="bbem-slider"></span>
-                        </div>
-                        <span class="bbem-toggle-label">Labels</span>
-                    </label>
+                    <label class="bbem-toggle-group"><div class="bbem-switch"><input type="checkbox" id="bbem-toggle-labels" ${userSettings.showLabels ? 'checked' : ''}><span class="bbem-slider"></span></div><span class="bbem-toggle-label">Labels</span></label>
                 </div>
                 <div class="bbem-footer-right">
                     <button class="bbem-btn bbem-btn-secondary bbem-close-btn">Cancel</button>
@@ -215,9 +179,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.body.appendChild(panel);
         
-        const pos = calculateInitialPosition(440);
-        panel.style.left = pos.left + 'px';
-        panel.style.top = pos.top + 'px';
+        const structurePanel = document.getElementById('bricks-structure');
+        let left = 350, top = 100;
+        if (structurePanel) {
+            const rect = structurePanel.getBoundingClientRect();
+            left = rect.right + 10;
+            top = rect.top + 40;
+        }
+        if (left + 440 > window.innerWidth) left = window.innerWidth - 440 - 20;
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
         requestAnimationFrame(() => { panel.style.opacity = '1'; });
         
         setupDraggable(panel);
@@ -228,21 +199,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = element.querySelector('#bbem-drag-handle');
         if (!header) return;
         let isDragging = false, startX, startY, initialLeft, initialTop;
-        header.onmousedown = (e) => {
+        
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.bbem-close')) return;
             isDragging = true; startX = e.clientX; startY = e.clientY;
             const rect = element.getBoundingClientRect();
             initialLeft = rect.left; initialTop = rect.top;
             element.style.transform = 'none';
             header.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
-        };
-        document.onmousemove = (e) => {
+        });
+        document.addEventListener('mousemove', (e) => {
             if (!isDragging) return; e.preventDefault();
             element.style.left = `${initialLeft + (e.clientX - startX)}px`;
             element.style.top = `${initialTop + (e.clientY - startY)}px`;
-        };
-        document.onmouseup = () => {
-            isDragging = false; header.style.cursor = 'grab'; document.body.style.userSelect = '';
-        };
+        });
+        document.addEventListener('mouseup', () => {
+            if (isDragging) { isDragging = false; header.style.cursor = 'grab'; document.body.style.userSelect = ''; }
+        });
     }
 
     function setupInteractions(panel) {
@@ -266,29 +239,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modVisBtn = panel.querySelector('#bbem-toggle-mods-vis');
         if(modVisBtn) {
-            modVisBtn.addEventListener('click', () => {
+            modVisBtn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
                 const isActive = modVisBtn.classList.toggle('active');
                 userSettings.showModifiers = isActive;
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
-                const inputGroups = panel.querySelectorAll('.bbem-input-group');
-                inputGroups.forEach(g => isActive ? g.classList.remove('hide-mods') : g.classList.add('hide-mods'));
-                if (isActive) toolbar.classList.add('mods-active'); else toolbar.classList.remove('mods-active');
+                panel.querySelectorAll('.bbem-input-group').forEach(g => isActive ? g.classList.remove('hide-mods') : g.classList.add('hide-mods'));
+                isActive ? toolbar.classList.add('mods-active') : toolbar.classList.remove('mods-active');
             });
         }
 
-        // LÓGICA DE REACTIVIDAD: Actualizar prefijos del Bloque
         const blockInput = panel.querySelector('input[data-is-block="true"]');
         if (blockInput) {
             blockInput.addEventListener('input', (e) => {
                 const newBlockName = slugify(e.target.value);
-                const prefixes = panel.querySelectorAll('.bbem-block-prefix');
-                prefixes.forEach(prefix => {
+                panel.querySelectorAll('.bbem-block-prefix').forEach(prefix => {
                     prefix.textContent = newBlockName ? `${newBlockName}__` : '';
                 });
             });
         }
 
-        // --- MAGIA NUEVA: VALIDACIÓN EN VIVO AL ESCRIBIR ---
         panel.querySelectorAll('.bbem-class-name').forEach(input => {
             input.addEventListener('input', (e) => {
                 const wrapper = e.target.closest('.bbem-class-wrapper');
@@ -297,13 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         wrapper.classList.add('bbem-input-error');
                     } else {
                         wrapper.classList.remove('bbem-input-error');
-                        wrapper.classList.remove('bbem-shake'); // Quitamos el shake si existía
+                        wrapper.classList.remove('bbem-shake');
                     }
                 }
             });
         });
-        
-        // Enfocar el input al hacer clic en el wrapper
+
         panel.querySelectorAll('.bbem-class-wrapper').forEach(wrapper => {
             wrapper.addEventListener('click', () => {
                 const input = wrapper.querySelector('input');
@@ -311,11 +280,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Botón Select All/None
         const selectAllBtn = panel.querySelector('#bbem-select-all-btn');
         if(selectAllBtn) {
             let allSelected = true;
-            selectAllBtn.addEventListener('click', () => {
+            selectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
                 allSelected = !allSelected;
                 panel.querySelectorAll('.bbem-include-checkbox').forEach(cb => {
                     cb.checked = allSelected;
@@ -328,17 +297,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (input && !input.value.trim() && wrapper) wrapper.classList.add('bbem-input-error');
                     } else {
                         row.classList.add('disabled');
-                        if (wrapper) {
-                            wrapper.classList.remove('bbem-input-error');
-                            wrapper.classList.remove('bbem-shake');
-                        }
+                        if (wrapper) { wrapper.classList.remove('bbem-input-error'); wrapper.classList.remove('bbem-shake'); }
                     }
                 });
                 selectAllBtn.textContent = allSelected ? "None" : "All";
             });
         }
         
-        // Checkboxes individuales (Actualizado para validación interactiva)
         panel.querySelectorAll('.bbem-include-checkbox').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 const row = e.target.closest('.bbem-row');
@@ -347,41 +312,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (e.target.checked) {
                     row.classList.remove('disabled');
-                    // Si al volver a marcar el campo está vacío, pintar rojo
-                    if (input && !input.value.trim() && wrapper) {
-                        wrapper.classList.add('bbem-input-error');
-                    }
+                    if (input && !input.value.trim() && wrapper) wrapper.classList.add('bbem-input-error');
                 } else {
                     row.classList.add('disabled');
-                    // Si desmarcamos, limpiar errores para que se vea neutro
-                    if (wrapper) {
-                        wrapper.classList.remove('bbem-input-error');
-                        wrapper.classList.remove('bbem-shake');
-                    }
+                    if (wrapper) { wrapper.classList.remove('bbem-input-error'); wrapper.classList.remove('bbem-shake'); }
                 }
             });
         });
 
-        const close = () => panel.remove();
-        panel.querySelectorAll('.bbem-close, .bbem-close-btn').forEach(b => b.onclick = close);
+        const closePanel = (e) => {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            panel.remove();
+        };
+
+        panel.querySelectorAll('.bbem-close, .bbem-close-btn').forEach(btn => {
+            btn.addEventListener('click', closePanel);
+        });
         
-        // --- VALIDACIÓN AL HACER CLIC EN APPLY (Ahora con vibración separada) ---
-        const applyBtn = document.getElementById('bbem-apply');
+        const applyBtn = panel.querySelector('#bbem-apply');
         if(applyBtn) {
-            applyBtn.onclick = () => {
+            applyBtn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
                 let isValid = true;
                 
                 panel.querySelectorAll('.bbem-row').forEach(row => {
                     if (!row.querySelector('.bbem-include-checkbox').checked) return;
-                    
                     const inputEl = row.querySelector('.bbem-class-name');
                     const wrapper = row.querySelector('.bbem-class-wrapper');
                     
                     if (!inputEl.value.trim()) {
                         isValid = false;
                         wrapper.classList.add('bbem-input-error');
-                        
-                        // Forzar reinicio de animación de vibración (Shake)
                         wrapper.classList.remove('bbem-shake');
                         void wrapper.offsetWidth; 
                         wrapper.classList.add('bbem-shake');
@@ -393,9 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isValid) {
                     applyClasses(panel);
-                    close();
+                    closePanel();
                 }
-            };
+            });
         }
     }
 

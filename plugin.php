@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bricks BEM Generator
  * Description: Automatically generate BEM classes from the Bricks structure panel.
- * Version: 1.3
+ * Version: 1.4
  * Author: Samir Haddad
  * Author URI: https://samirh.com/
  * License: GPL v2 or later

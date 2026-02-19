@@ -1,11 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
     const SETTINGS_KEY = 'bbem_settings';
     let userSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {
-        replaceMode: false,
         syncLabels: true,
         showModifiers: false,
-        showLabels: true 
+        showLabels: true,
+        classAction: 'rename' 
     };
+
+    // Lista negra de propiedades de Bricks que son ESTRUCTURA o CONTENIDO, no estilos CSS.
+    // Todo lo que NO esté en esta lista, se considerará un estilo y se migrará a la clase.
+    const contentBlacklist = [
+        '_cssGlobalClasses', '_cssClasses', '_cssId', '_name', '_attributes', '_interactions',
+        'text', 'title', 'subtitle', 'image', 'icon', 'video', 'url', 'link', 'query', 'tag', 'type',
+        'content', 'items', 'formFields', 'code', 'html', 'shortcode', 'svgCode', 'svgContent',
+        'autoplay', 'loop', 'controls', 'placeholder', 'size', 'variant', 'colorScheme',
+        'isCustom', 'postType', 'taxonomy', 'terms', 'author', 'useDynamicData', 'dynamicData',
+        'popup', 'conditions', 'loopQuery', 'accordion', 'tabs', 'slider', 'gallery', 'iconLibrary',
+        'divider', 'label', 'description', 'heading'
+    ];
 
     function escapeHtml(text) {
         if (!text) return '';
@@ -112,11 +124,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const baseLabel = rootEl.label || rootEl.name || 'block';
         const blockClass = slugify(baseLabel);
         
+        let showActionSelect = false;
+        const elementsToProcess = [rootEl, ...getDescendants(rootId)];
+        const state = getBricksState(); 
+        
+        // VALIDACIÓN DE INTELIGENCIA UI: 
+        // Mostrar el selector si hay clases viejas válidas O si hay estilos en el ID para migrar.
+        elementsToProcess.forEach(el => {
+            if (el && el.settings) {
+                // 1. ¿Hay clases reales?
+                if (el.settings._cssGlobalClasses) {
+                    try {
+                        const classIds = Object.values(el.settings._cssGlobalClasses);
+                        for (let i = 0; i < classIds.length; i++) {
+                            const cid = classIds[i];
+                            if (typeof cid === 'string' && cid.trim() !== '') {
+                                const realClass = state.globalClasses.find(gc => gc.id === cid);
+                                if (realClass && realClass.name && realClass.name.trim() !== '') {
+                                    showActionSelect = true;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+                
+                // 2. ¿Hay estilos en el ID para migrar?
+                Object.keys(el.settings).forEach(key => {
+                    if (!contentBlacklist.includes(key)) {
+                        showActionSelect = true;
+                    }
+                });
+            }
+        });
+        
         const panel = document.createElement('div');
         panel.className = 'bbem-draggable-panel';
         
         let rowsHtml = '';
-        [rootEl, ...getDescendants(rootId)].forEach(el => {
+        elementsToProcess.forEach(el => {
             const rawLabel = el.label || el.name || 'element';
             const safeLabel = escapeHtml(rawLabel); 
             const safeBlockClass = escapeHtml(blockClass);
@@ -146,6 +191,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
         });
 
+        let actionSelectHtml = '';
+        if (showActionSelect) {
+            actionSelectHtml = `
+                <select id="bbem-class-action" class="bbem-select">
+                    <option value="rename" ${userSettings.classAction === 'rename' ? 'selected' : ''}>Rename classes</option>
+                    <option value="remove" ${userSettings.classAction === 'remove' ? 'selected' : ''}>Create new & remove old</option>
+                    <option value="delete" ${userSettings.classAction === 'delete' ? 'selected' : ''}>Create new & delete old</option>
+                    <option value="keep" ${userSettings.classAction === 'keep' ? 'selected' : ''}>Create new & keep old</option>
+                    <option value="copy-id" ${userSettings.classAction === 'copy-id' ? 'selected' : ''}>Copy ID styles to Class</option>
+                </select>
+            `;
+        }
+
         const bodyClass = userSettings.showLabels ? '' : 'hide-labels';
         const toolbarClass = userSettings.showModifiers ? 'mods-active' : '';
         const modBtnClass = userSettings.showModifiers ? 'active' : '';
@@ -158,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="bbem-toolbar ${toolbarClass}">
                 <div class="bbem-general-group">
-                    <label class="bbem-toggle-group"><div class="bbem-switch"><input type="checkbox" id="bbem-toggle-replace" ${userSettings.replaceMode ? 'checked' : ''}><span class="bbem-slider"></span></div><span class="bbem-toggle-label">Replace</span></label>
+                    ${actionSelectHtml}
                     <label class="bbem-toggle-group"><div class="bbem-switch"><input type="checkbox" id="bbem-toggle-sync" ${userSettings.syncLabels ? 'checked' : ''}><span class="bbem-slider"></span></div><span class="bbem-toggle-label">Sync</span></label>
                 </div>
                 <div class="bbem-separator"></div>
@@ -220,11 +278,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupInteractions(panel) {
         const toolbar = panel.querySelector('.bbem-toolbar');
+        
+        const actionSelect = panel.querySelector('#bbem-class-action');
+        if (actionSelect) {
+            actionSelect.addEventListener('change', (e) => {
+                userSettings.classAction = e.target.value;
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings));
+            });
+        }
+
         const saveSetting = (id, key) => {
             const el = panel.querySelector(id);
             if(el) { el.addEventListener('change', (e) => { userSettings[key] = e.target.checked; localStorage.setItem(SETTINGS_KEY, JSON.stringify(userSettings)); }); }
         };
-        saveSetting('#bbem-toggle-replace', 'replaceMode');
         saveSetting('#bbem-toggle-sync', 'syncLabels');
 
         const labelsToggle = panel.querySelector('#bbem-toggle-labels');
@@ -363,8 +429,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyClasses(panel) {
         let count = 0;
         const state = getBricksState();
-        const shouldReplace = panel.querySelector('#bbem-toggle-replace').checked;
         const shouldSyncLabel = panel.querySelector('#bbem-toggle-sync').checked;
+        const actionSelect = panel.querySelector('#bbem-class-action');
+        const userAction = actionSelect ? actionSelect.value : 'rename';
 
         panel.querySelectorAll('.bbem-row').forEach(row => {
             if (!row.querySelector('.bbem-include-checkbox').checked) return;
@@ -384,41 +451,80 @@ document.addEventListener('DOMContentLoaded', () => {
             const modInput = row.querySelector('.bbem-modifier').value.trim();
             if (!clsInput) return;
 
-            let classesToCreate = [];
             let cleanMod = modInput;
             if (cleanMod && !cleanMod.startsWith('--')) cleanMod = '--' + cleanMod;
             const isModifierOperation = !!cleanMod;
 
-            if (isModifierOperation) {
-                const modClass = `${clsInput}${cleanMod}`; 
-                classesToCreate = [modClass];
-            } else {
-                classesToCreate = [clsInput];
-            }
-
+            const finalClassName = isModifierOperation ? `${clsInput}${cleanMod}` : clsInput;
             const element = findElement(id);
+            
             if (element) {
                 if (!element.settings) element.settings = {};
-                if (shouldReplace && !isModifierOperation) element.settings._cssGlobalClasses = [];
-                if (!element.settings._cssGlobalClasses) element.settings._cssGlobalClasses = [];
+                if (!Array.isArray(element.settings._cssGlobalClasses)) element.settings._cssGlobalClasses = [];
+                
+                const oldClassIds = element.settings._cssGlobalClasses.filter(cid => cid && cid.trim() !== '');
+                let actionToApply = isModifierOperation ? 'keep' : userAction;
 
-                classesToCreate.forEach(className => {
-                    let globalClass = state.globalClasses.find(gc => gc.name === className);
-                    if (!globalClass) {
-                        globalClass = { id: Math.random().toString(36).slice(2, 8), name: className, settings: {} };
-                        state.globalClasses.push(globalClass);
+                let newGlobalClass = state.globalClasses.find(gc => gc.name === finalClassName);
+                let isNewClassCreated = false;
+                
+                if (!newGlobalClass) {
+                    newGlobalClass = { id: Math.random().toString(36).slice(2, 8), name: finalClassName, settings: {} };
+                    state.globalClasses.push(newGlobalClass);
+                    isNewClassCreated = true;
+                }
+
+                // LÓGICA MIGRACIÓN DE ESTILOS DEL ID A LA CLASE BEM
+                if (actionToApply === 'copy-id') {
+                    Object.keys(element.settings).forEach(key => {
+                        // Si la propiedad NO está en la lista negra, es un estilo CSS.
+                        if (!contentBlacklist.includes(key)) {
+                            // Clonamos el estilo a la nueva clase BEM
+                            newGlobalClass.settings[key] = JSON.parse(JSON.stringify(element.settings[key]));
+                            // Eliminamos el estilo del ID del elemento para dejarlo limpio
+                            delete element.settings[key];
+                        }
+                    });
+                }
+
+                // Lógica de clonado para RENAME
+                if (actionToApply === 'rename' && oldClassIds.length > 0 && isNewClassCreated) {
+                    const firstOldClassId = oldClassIds[0];
+                    const firstOldClassObj = state.globalClasses.find(gc => gc.id === firstOldClassId);
+                    if (firstOldClassObj && firstOldClassObj.settings) {
+                        newGlobalClass.settings = JSON.parse(JSON.stringify(firstOldClassObj.settings));
                     }
-                    if (!element.settings._cssGlobalClasses.includes(globalClass.id)) {
-                        element.settings._cssGlobalClasses.push(globalClass.id);
-                        count++;
+                }
+
+                // Borrar clases viejas globalmente si toca
+                if (actionToApply === 'delete' || actionToApply === 'rename') {
+                    oldClassIds.forEach(idToRemove => {
+                        const idx = state.globalClasses.findIndex(gc => gc.id === idToRemove);
+                        if (idx !== -1) {
+                            state.globalClasses.splice(idx, 1);
+                        }
+                    });
+                }
+
+                // Asignar clases al elemento
+                element.settings._cssGlobalClasses.splice(0, element.settings._cssGlobalClasses.length);
+
+                if (actionToApply === 'keep') {
+                    oldClassIds.forEach(oldId => element.settings._cssGlobalClasses.push(oldId));
+                    if (!element.settings._cssGlobalClasses.includes(newGlobalClass.id)) {
+                        element.settings._cssGlobalClasses.push(newGlobalClass.id);
                     }
-                });
+                } else {
+                    // Para RENAME, REMOVE, DELETE y COPY-ID: El elemento queda solo con la nueva clase
+                    element.settings._cssGlobalClasses.push(newGlobalClass.id);
+                }
+
+                count++;
 
                 if (shouldSyncLabel && !isModifierOperation) {
-                    const baseClass = classesToCreate[0]; 
                     const blockName = panel.querySelector('input[data-is-block="true"]').value.trim();
-                    let newLabel = formatLabel(baseClass, blockName);
-                    if (!newLabel || newLabel.trim() === '') newLabel = baseClass.replace(/-/g, ' ').replace(/(^\w{1})|(\s+\w{1})/g, l => l.toUpperCase());
+                    let newLabel = formatLabel(finalClassName, blockName);
+                    if (!newLabel || newLabel.trim() === '') newLabel = finalClassName.replace(/-/g, ' ').replace(/(^\w{1})|(\s+\w{1})/g, l => l.toUpperCase());
                     element.label = newLabel;
                     setTimeout(() => {
                         const selectors = [
@@ -435,7 +541,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (count > 0 || shouldSyncLabel) {
+        // Refrescar entorno de Bricks
+        if (count > 0 || shouldSyncLabel || userAction !== 'keep') {
             state.globalClasses.push({});
             setTimeout(() => state.globalClasses.pop(), 50);
         }

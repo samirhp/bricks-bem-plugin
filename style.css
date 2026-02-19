@@ -514,15 +514,61 @@ input:checked + .bbem-slider:before {
   animation: bbemShake 0.4s ease-in-out;
 }
 
+/* Oculto por defecto con transición suave */
 li[data-id] .bbem-trigger-btn {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.10s ease;
 }
 
-li[data-id]>div:hover .bbem-trigger-btn {
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
+/* ======= EL FIX ANTI-BURBUJA ESTÁ AQUÍ ======= */
+/* Movimos el :hover al hijo directo (> div), así solo se enciende si el ratón 
+   está sobre la propia fila de texto, y no sobre las sub-listas (hijos) */
+li[data-id] > div:hover .bbem-trigger-btn {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+.bbem-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bbem-input-bg);
+  color: #aaa;
+  border: 1px solid var(--bbem-border);
+  border-radius: 3px;
+  padding: 0 24px 0 12px;
+  height: auto;
+  font-size: 9px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23aaaaaa%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20class%3D%22feather%20feather-chevron-down%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 14px;
+  transition: all 0.2s;
+}
+
+.bbem-select:hover {
+  color: #fff;
+  border-color: #666;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20class%3D%22feather%20feather-chevron-down%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+}
+
+.bbem-select:focus {
+  border-color: var(--bbem-accent);
+  color: #fff;
+}
+
+.bbem-select option {
+  background: var(--bbem-bg);
+  color: #fff;
+  text-transform: none;
+  padding: 10px;
 }
